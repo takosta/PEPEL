@@ -1,0 +1,7 @@
+dev/dist/
+ios/build/
+ios/*.xcodeproj
+ios/Payload/
+ios/*.ipa
+ios/Resources/game/
+.DS_Store

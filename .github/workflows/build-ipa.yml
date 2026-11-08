@@ -1,0 +1,61 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build game HTML from source
+        run: |
+          python3 dev/build.py
+          mkdir -p ios/Resources/game
+          cp dev/dist/index.html ios/Resources/game/index.html
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build app (unsigned)
+        working-directory: ios
+        run: |
+          xcodebuild -project AshMaster.xcodeproj -scheme AshMaster \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -n 40
+
+      - name: Package IPA
+        working-directory: ios
+        run: |
+          APP=$(find build/Build/Products -name "AshMaster.app" -type d | head -n 1)
+          test -n "$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry AshMaster.ipa Payload
+          ls -la AshMaster.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AshMaster-ipa
+          path: ios/AshMaster.ipa
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Пепел Мастера — сборка ${{ github.run_number }}"
+          body: "Свежая сборка. Скачай AshMaster.ipa и подпиши своим сертификатом."
+          files: ios/AshMaster.ipa
+          make_latest: true
